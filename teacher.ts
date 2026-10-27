@@ -1,0 +1,6 @@
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { getDatabase } from './database';
+export function missingSettings(){return ['DATABASE_URL','SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY'].filter(k=>!process.env[k]);}
+export async function authClient(){if(missingSettings().length)throw Error('SETUP_REQUIRED');const jar=await cookies();return createServerClient(process.env.SUPABASE_URL!,process.env.SUPABASE_PUBLISHABLE_KEY!,{cookieOptions:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',path:'/'},cookies:{getAll:()=>jar.getAll(),setAll:all=>{for(const {name,value,options} of all)jar.set(name,value,{...options,httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',path:'/'});}}});}
+export async function getTeacherUser(){if(missingSettings().length)return null;const auth=await authClient();const {data,error}=await auth.auth.getUser();if(error||!data.user?.email||!data.user.email_confirmed_at)return null;const email=data.user.email.toLowerCase().trim();const d=await getDatabase();if(!await d.prepare('SELECT email FROM teacher_access WHERE email=?').bind(email).first())return null;return {userId:data.user.id,email};}
